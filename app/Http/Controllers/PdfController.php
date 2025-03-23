@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Pdf;
 use Illuminate\Http\Request;
 use Razorpay\Api\Api;
-use Illuminate\Support\Facades\Log; // Import the Log facade
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class PdfController extends Controller
 {
@@ -19,7 +21,82 @@ class PdfController extends Controller
     {
         return view('pdfs.show', compact('pdf'));
     }
+    public function pdfcreate()
+    {
+        return view('pdfs.upload');
+    }
 
+    public function store(Request $request)
+    {
+        $request->validate([
+            'title' => 'required',
+            'description' => 'nullable',
+            'price' => 'required|numeric|min:0',
+            'pdf_file' => 'required|file|mimes:pdf|max:2048', // Validate the file
+        ]);
+
+        if ($request->hasFile('pdf_file')) {
+            $file = $request->file('pdf_file');
+            $filename = $file->getClientOriginalName();
+            $filepath = $file->store('pdfs', 'public'); // Store in storage/app/public/pdfs
+
+            Pdf::create([
+                'title' => $request->title,
+                'description' => $request->description,
+                'price' => $request->price,
+                'filename' => $filename,
+                'filepath' => $filepath, // Save the relative path
+            ]);
+
+            return redirect()->route('dashboard')->with('success', 'PDF uploaded successfully!');
+        }
+
+        return back()->with('error', 'There was an error uploading the PDF.');
+    }
+
+    public function edit(Pdf $pdf)
+{
+    // Check if the user is an admin (you'll need to define how admins are identified)
+    if (!Auth::user()) { // Replace isAdmin() with your logic
+        abort(403, 'Unauthorized action.'); // Or redirect with an error message
+    }
+
+    return view('pdfs.edit', compact('pdf'));
+}
+
+public function update(Request $request, Pdf $pdf)
+{
+    // Check if the user is an admin
+    if (!Auth::user()) {
+        abort(403, 'Unauthorized action.');
+    }
+
+    $request->validate([
+        'title' => 'required',
+        'description' => 'nullable',
+        'price' => 'required|numeric|min:0',
+        // Add validation for the file if you allow updating the PDF
+    ]);
+
+    $pdf->update($request->all()); // Or update specific fields individually for safety
+
+    return redirect()->route('dashboard')->with('success', 'PDF updated successfully!');
+}
+
+public function destroy(Pdf $pdf)
+{
+    // Check if the user is an admin
+    if (!Auth::user()) {
+        abort(403, 'Unauthorized action.');
+    }
+
+    // Delete the file from storage (optional, but recommended)
+    Storage::delete('public/' . $pdf->filepath);
+
+    $pdf->delete();
+
+    return redirect()->route('dashboard')->with('success', 'PDF deleted successfully!');
+}
     public function processPayment(Request $request)
     {
         $pdf = Pdf::findOrFail($request->pdf_id);
