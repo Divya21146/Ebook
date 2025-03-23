@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException; // Import ValidationException
 
 class AuthController extends Controller
 {
@@ -14,24 +15,30 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        // 1. Validate the request data
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
+
+        // 2. Attempt to authenticate the user
         $credentials = $request->only('email', 'password');
 
-        $staticEmail = 'admin@gmail.com';
-        $staticPassword = 'password';
+        if (Auth::attempt($credentials)) {
+            // Authentication passed...
 
-        if ($credentials['email'] == $staticEmail && $credentials['password'] == $staticPassword) {
-            // Manually create and authenticate a user (without database)
-            $user = new \stdClass(); // Use a generic object
-            $user->email = $staticEmail; // Set email to it for simplicity in using Auth::user()
-            Auth::loginUsingId(1);  //Hardcoded user_id. In production, this will read from the db
-            session(['user' => $user]);
+            // 3. Regenerate the session
+            $request->session()->regenerate();
 
-            return redirect()->route('dashboard');
-            // return redirect()->intended(route('pdf.index'));
+            // 4. Redirect to the intended route (or the dashboard)
+            return redirect()->intended(route('dashboard'));  // Or your desired route
         }
 
-        return back()->withErrors([
-            'email' => 'Invalid credentials.',
+        // 5. Authentication failed...
+
+        // Throw a ValidationException with a user-friendly error message
+        throw ValidationException::withMessages([
+            'email' => [trans('auth.failed')], // Use the default authentication error message
         ]);
     }
 
